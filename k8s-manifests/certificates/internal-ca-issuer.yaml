@@ -1,0 +1,44 @@
+---
+# Create a self-signed CA certificate for internal use
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-cluster-issuer
+spec:
+  selfSigned: {}
+---
+# Generate a CA certificate that will be used to sign other certificates
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: daclab-ai-internal-ca
+  secretName: internal-ca-secret
+  duration: 87600h # 10 years
+  renewBefore: 8760h # 1 year before expiry
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  subject:
+    organizations:
+      - "DACLab AI Internal CA"
+    countries:
+      - "US"
+    organizationalUnits:
+      - "Infrastructure"
+  issuerRef:
+    name: selfsigned-cluster-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# Create a ClusterIssuer that uses our CA to sign certificates
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: internal-ca-issuer
+spec:
+  ca:
+    secretName: internal-ca-secret
