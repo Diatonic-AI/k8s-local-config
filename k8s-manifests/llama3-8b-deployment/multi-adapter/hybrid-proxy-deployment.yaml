@@ -16,8 +16,9 @@ data:
     import os
     import json
     import asyncio
-    from aiohttp import web, ClientSession, ClientTimeout
     import logging
+    import os
+    from aiohttp import web, ClientSession, ClientTimeout
 
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -36,23 +37,76 @@ data:
         return web.json_response({"status": "healthy", "service": "hybrid-proxy"})
 
     async def call_local_vllm(session, payload):
-        """Call local vLLM instance"""
+        """Call local Ollama instance using native API"""
         try:
+            # Convert OpenAI chat format to Ollama format
+            messages = payload.get("messages", [])
+            # Combine messages into a single prompt
+            prompt_parts = []
+            for msg in messages:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "system":
+                    prompt_parts.append(f"System: {content}")
+                elif role == "user":
+                    prompt_parts.append(f"User: {content}")
+                elif role == "assistant":
+                    prompt_parts.append(f"Assistant: {content}")
+            
+            prompt = "\n".join(prompt_parts)
+            if not prompt:
+                return None, "Empty prompt"
+            
+            # Use Ollama's native /api/generate endpoint
+            ollama_payload = {
+                "model": "llama3:8b",
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": payload.get("temperature", 0.7),
+                    "top_p": payload.get("top_p", 0.9),
+                    "num_predict": payload.get("max_tokens", 512)
+                }
+            }
+            
             timeout = ClientTimeout(total=LOCAL_TIMEOUT)
             async with session.post(
-                f"{LOCAL_VLLM_URL}/v1/chat/completions",
-                json=payload,
+                f"{LOCAL_VLLM_URL}/api/generate",
+                json=ollama_payload,
                 timeout=timeout
             ) as resp:
                 if resp.status == 200:
-                    return await resp.json(), None
+                    ollama_response = await resp.json()
+                    response_text = ollama_response.get("response", "")
+                    
+                    # Convert back to OpenAI format
+                    openai_format = {
+                        "id": "ollama-" + os.urandom(8).hex(),
+                        "object": "chat.completion",
+                        "created": int(asyncio.get_event_loop().time()),
+                        "model": "llama3:8b",
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": response_text
+                            },
+                            "finish_reason": "stop"
+                        }],
+                        "usage": {
+                            "prompt_tokens": ollama_response.get("prompt_eval_count", 0),
+                            "completion_tokens": ollama_response.get("eval_count", 0),
+                            "total_tokens": ollama_response.get("prompt_eval_count", 0) + ollama_response.get("eval_count", 0)
+                        }
+                    }
+                    return openai_format, None
                 else:
                     error_text = await resp.text()
-                    return None, f"Local vLLM error {resp.status}: {error_text}"
+                    return None, f"Local Ollama error {resp.status}: {error_text}"
         except asyncio.TimeoutError:
-            return None, "Local vLLM timeout"
+            return None, "Local Ollama timeout"
         except Exception as e:
-            return None, f"Local vLLM exception: {str(e)}"
+            return None, f"Local Ollama exception: {str(e)}"
 
     async def call_huggingface_api(session, payload):
         """Call HuggingFace Inference API with Pro resources"""
@@ -225,8 +279,11 @@ spec:
       - name: proxy
         image: python:3.11-slim
         command:
-        - python3
-        - /app/proxy.py
+        - sh
+        - -c
+        - |
+          pip install -q aiohttp
+          python3 /app/proxy.py
         env:
         - name: HF_TOKEN
           valueFrom:
@@ -262,31 +319,19 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 10
+          initialDelaySeconds: 20
           periodSeconds: 30
-      initContainers:
-      - name: install-deps
-        image: python:3.11-slim
-        command:
-        - sh
-        - -c
-        - pip install aiohttp
-        volumeMounts:
-        - name: pip-cache
-          mountPath: /root/.cache/pip
       volumes:
       - name: proxy-code
         configMap:
           name: hybrid-proxy-config
           defaultMode: 0755
-      - name: pip-cache
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

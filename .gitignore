@@ -40,22 +40,63 @@ helmfile.lock.json
 *.tfstate.*
 .terraform.lock.hcl
 
-# Env/Secrets (never commit real secrets)
+# Environment Files & Secrets (CRITICAL - never commit real secrets)
 .env
 .env.*
+!.env.example
 secrets*.yaml
 *secrets*.yaml
 *.dec.yaml
 *.decrypted.yaml
 *-sealed.key
+
+# Private Keys & Certificates
 *.pem
 *.key
 *.pfx
 *.p12
+*.crt
+*.cert
+*.der
+*.cer
 
-# Reports/Temp
-# Keep committed reports under version control
+# Cloud Provider Credentials
+*.json.enc
+*credentials*
+*gcp-key*.json
+*aws-credentials*
+*azure-credentials*
 
+# API Keys and Tokens (HuggingFace, OpenAI, etc)
+*hf_token*
+*openai_key*
+*api_key*
+*token.txt
+
+# Database Dumps
+*.sql
+*.dump
+*.sqlite
+*.db
+
+# SSH Keys
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.pub
+
+# Reports/Temp (reports/ is tracked for analysis)
 tmp/
 temp/
 *.log
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# OS-specific
+Thumbs.db
+.Spotlight-V100
+.Trashes
