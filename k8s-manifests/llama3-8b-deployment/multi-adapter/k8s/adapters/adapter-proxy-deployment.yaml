@@ -1,0 +1,193 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama3-adapter-proxy
+  namespace: llama3-multi-adapter
+  labels:
+    app: adapter-proxy
+    component: routing
+spec:
+  replicas: 3  # Multiple replicas for HA
+  selector:
+    matchLabels:
+      app: adapter-proxy
+  template:
+    metadata:
+      labels:
+        app: adapter-proxy
+        component: routing
+    spec:
+      containers:
+      - name: nginx-proxy
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: adapter-proxy-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-proxy-config
+  namespace: llama3-multi-adapter
+data:
+  nginx.conf: |
+    events {
+        worker_connections 4096;
+        use epoll;
+        multi_accept on;
+    }
+    
+    http {
+        upstream ollama_backend {
+            least_conn;
+            server ollama-base-centralized:11434 max_fails=3 fail_timeout=30s;
+            keepalive 256;
+            keepalive_requests 10000;
+        }
+        
+        # Logging
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+        
+        # Performance settings
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 300;
+        keepalive_requests 10000;
+        
+        # Timeouts for long-running AI requests
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        
+        # Buffer settings
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_http_version 1.1;
+        
+        server {
+            listen 80;
+            server_name _;
+            
+            # Health check endpoint
+            location /health {
+                access_log off;
+                return 200 "OK\n";
+                add_header Content-Type text/plain;
+            }
+            
+            # Chatbot adapter route
+            location /chatbot/ {
+                rewrite ^/chatbot/(.*) /$1 break;
+                proxy_pass http://ollama_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Adapter-Type "chatbot";
+                proxy_set_header Connection "";
+            }
+            
+            # Code adapter route
+            location /code/ {
+                rewrite ^/code/(.*) /$1 break;
+                proxy_pass http://ollama_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Adapter-Type "code";
+                proxy_set_header Connection "";
+            }
+            
+            # RAG adapter route
+            location /rag/ {
+                rewrite ^/rag/(.*) /$1 break;
+                proxy_pass http://ollama_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Adapter-Type "rag";
+                proxy_set_header Connection "";
+            }
+            
+            # Microservices/Architecture adapter route
+            location /architecture/ {
+                rewrite ^/architecture/(.*) /$1 break;
+                proxy_pass http://ollama_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Adapter-Type "architecture";
+                proxy_set_header Connection "";
+            }
+            
+            # Base/default route
+            location / {
+                proxy_pass http://ollama_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Adapter-Type "base";
+                proxy_set_header Connection "";
+            }
+        }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama3-adapter-proxy
+  namespace: llama3-multi-adapter
+spec:
+  selector:
+    app: adapter-proxy
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-base-centralized
+  namespace: llama3-multi-adapter
+spec:
+  selector:
+    app.kubernetes.io/name: ollama
+    app.kubernetes.io/instance: base-centralized
+  ports:
+  - port: 11434
+    targetPort: 11434
+    protocol: TCP
+    name: http
+  type: ClusterIP

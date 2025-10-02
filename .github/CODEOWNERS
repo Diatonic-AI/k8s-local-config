@@ -1,0 +1,6 @@
+# Default code ownership for the repository
+* @diatonic-ai/platform-team
+
+# Critical manifests
+k8s-manifests/ @diatonic-ai/platform-team
+scripts/ @diatonic-ai/platform-team

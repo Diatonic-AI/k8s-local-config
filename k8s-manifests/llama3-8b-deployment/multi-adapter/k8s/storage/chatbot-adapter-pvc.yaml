@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-chatbot-adapter-pvc
+  namespace: llama3-multi-adapter
+  labels:
+    app.kubernetes.io/component: adapter-storage
+    app.kubernetes.io/adapter-type: chatbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi  # LoRA/QLoRA adapter weights

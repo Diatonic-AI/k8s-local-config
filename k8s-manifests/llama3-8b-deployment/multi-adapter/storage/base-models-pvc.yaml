@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-base-models-pvc
+  namespace: llama3-multi-adapter
+  labels:
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: ai-inference
+spec:
+  accessModes:
+    - ReadWriteMany  # Shared across all pods
+  storageClassName: longhorn  # Or your preferred storage class
+  resources:
+    requests:
+      storage: 50Gi  # Base Llama3 8B model + overhead

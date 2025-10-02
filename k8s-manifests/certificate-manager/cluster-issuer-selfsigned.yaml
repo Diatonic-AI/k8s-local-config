@@ -1,0 +1,48 @@
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+  labels:
+    app: cert-manager
+    component: cluster-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  labels:
+    app: cert-manager
+    component: cluster-issuer
+spec:
+  acme:
+    # Staging server for testing (does not have rate limits)
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@daclab-ai.local
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  labels:
+    app: cert-manager
+    component: cluster-issuer
+spec:
+  acme:
+    # Production server (has rate limits - 5 certs per week per domain)
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@daclab-ai.local
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx

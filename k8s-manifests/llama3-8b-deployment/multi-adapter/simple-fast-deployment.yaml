@@ -1,0 +1,100 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-simple-fast
+  namespace: llama3-multi-adapter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama-simple-fast
+  template:
+    metadata:
+      labels:
+        app: ollama-simple-fast
+    spec:
+      runtimeClassName: nvidia  # Enable NVIDIA Container Runtime for CUDA support
+      nodeSelector:
+        kubernetes.io/hostname: daclab-asus  # GPU node
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        # Note: Ollama auto-detects CUDA when GPU devices are available
+        ports:
+        - containerPort: 11434
+          name: http
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0,1"  # Force both GPUs to be visible
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        - name: OLLAMA_KEEP_ALIVE
+          value: "-1"  # Keep models loaded forever
+        - name: OLLAMA_NUM_PARALLEL
+          value: "8"   # High parallelism
+        - name: OLLAMA_MAX_QUEUE
+          value: "1024"
+        - name: OLLAMA_FLASH_ATTENTION
+          value: "1"
+        - name: OLLAMA_KV_CACHE_TYPE
+          value: "f16"
+        - name: OLLAMA_NUM_GPU
+          value: "999"  # Use all available GPU layers
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "16"
+            nvidia.com/gpu: "2"  # Request BOTH GPUs
+          limits:
+            memory: "24Gi"
+            cpu: "32"
+            nvidia.com/gpu: "2"
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+      volumes:
+      - name: ollama-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-simple-fast
+  namespace: llama3-multi-adapter
+spec:
+  type: ClusterIP
+  selector:
+    app: ollama-simple-fast
+  ports:
+  - port: 11434
+    targetPort: 11434
+    name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ollama-simple-fast
+  namespace: llama3-multi-adapter
+  annotations:
+    cert-manager.io/cluster-issuer: "selfsigned-cluster-issuer"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - ollama-fast.local
+    secretName: ollama-fast-tls
+  rules:
+  - host: ollama-fast.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ollama-simple-fast
+            port:
+              number: 11434

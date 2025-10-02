@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-base-centralized
+  namespace: llama3-multi-adapter
+  labels:
+    app.kubernetes.io/name: ollama
+    app.kubernetes.io/instance: base-centralized
+    app.kubernetes.io/component: core-inference
+    app.kubernetes.io/part-of: ai-inference
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ollama
+      app.kubernetes.io/instance: base-centralized
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ollama
+        app.kubernetes.io/instance: base-centralized
+        app.kubernetes.io/component: core-inference
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      
+      initContainers:
+      - name: setup-permissions
+        image: busybox:1.36
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Setting up centralized model directories..."
+          mkdir -p /models/.ollama/models
+          chown -R 1001:1001 /models
+          chmod -R 755 /models
+          echo "Setup complete"
+        volumeMounts:
+        - name: base-models
+          mountPath: /models
+        securityContext:
+          runAsUser: 0
+      
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 11434
+          name: http
+          protocol: TCP
+        
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0"
+        - name: HOME
+          value: "/models"
+        - name: OLLAMA_MODELS
+          value: "/models/.ollama/models"
+        - name: OLLAMA_KEEP_ALIVE
+          value: "-1"  # Keep models loaded permanently
+        - name: OLLAMA_MAX_LOADED_MODELS
+          value: "3"   # Multiple models can be loaded
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"  # Use ALL GPUs
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0,1"  # Both GPUs
+        - name: OLLAMA_GPU_DRIVER
+          value: "cuda"
+        - name: OLLAMA_NUM_PARALLEL
+          value: "16"   # Very high parallelism
+        - name: OLLAMA_MAX_QUEUE
+          value: "1024" # Large queue for multiple adapters
+        - name: OLLAMA_NUM_THREADS
+          value: "32"   # Use all CPU threads
+        - name: OLLAMA_FLASH_ATTENTION
+          value: "1"
+        - name: OLLAMA_KV_CACHE_TYPE
+          value: "f16"
+        - name: OLLAMA_LOW_VRAM
+          value: "false"  # Disable low VRAM mode
+        - name: OLLAMA_GPU_LAYERS
+          value: "-1"     # Force all layers on GPU
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: base-models
+          mountPath: /models
+        
+        resources:
+          requests:
+            cpu: "16000m"     # 16 cores
+            memory: "64Gi"    # 64GB RAM
+            nvidia.com/gpu: 2 # BOTH GPUs
+          limits:
+            cpu: "32000m"     # All 32 cores available
+            memory: "96Gi"    # 96GB RAM
+            nvidia.com/gpu: 2 # BOTH GPUs
+        
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: http
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      
+      volumes:
+      - name: base-models
+        persistentVolumeClaim:
+          claimName: llama3-base-models-pvc
+      
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      
+      runtimeClassName: nvidia
+      
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule

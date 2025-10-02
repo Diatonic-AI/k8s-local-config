@@ -1,0 +1,84 @@
+---
+# Base model storage (shared read-only by all adapters)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-base-model
+  namespace: llama3-multi-adapter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 15Gi
+---
+# Chatbot adapter storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-chatbot-adapter
+  namespace: llama3-multi-adapter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+# RAG adapter storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-rag-adapter
+  namespace: llama3-multi-adapter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Code adapter storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-code-adapter
+  namespace: llama3-multi-adapter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Microservices adapter storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-microservices-adapter
+  namespace: llama3-multi-adapter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Qdrant vector database storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-storage
+  namespace: llama3-multi-adapter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi

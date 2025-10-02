@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama3-base-model
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-base-model
+    component: base-model
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: llama3-base-model
+  template:
+    metadata:
+      labels:
+        app: llama3-base-model
+        component: base-model
+    spec:
+      initContainers:
+      - name: pull-base-model
+        image: ollama/ollama:latest
+        command:
+          - sh
+          - -c
+          - |
+            echo "Pulling Llama3 8B base model..."
+            ollama pull llama3:8b
+            echo "Base model ready"
+        env:
+        - name: OLLAMA_MODELS
+          value: /models
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2"
+          limits:
+            memory: "12Gi"
+            cpu: "4"
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+        env:
+        - name: OLLAMA_MODELS
+          value: /models
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        - name: OLLAMA_ORIGINS
+          value: "*"
+        - name: OLLAMA_NUM_PARALLEL
+          value: "4"
+        - name: OLLAMA_MAX_LOADED_MODELS
+          value: "1"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "12Gi"
+            cpu: "8"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: llama3-base-model
+      nodeSelector:
+        nvidia.com/gpu.present: "true"

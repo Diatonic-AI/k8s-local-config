@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llama3-multi-adapter
+  labels:
+    name: llama3-multi-adapter
+    app.kubernetes.io/part-of: ai-inference
+    app.kubernetes.io/component: llm-multi-adapter

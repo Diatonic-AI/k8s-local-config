@@ -1,0 +1,25 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug!
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug
+    validations:
+      required: true
+
+  - type: textarea
+    id: manifests
+    attributes:
+      label: Related Manifests
+      description: Which manifests are affected?
+      placeholder: |
+        k8s-manifests/llama3-8b-deployment/...

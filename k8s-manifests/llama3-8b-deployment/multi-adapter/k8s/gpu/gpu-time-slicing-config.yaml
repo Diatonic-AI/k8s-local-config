@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: device-plugin-config
+  namespace: kube-system
+data:
+  config.yaml: |
+    version: v1
+    sharing:
+      timeSlicing:
+        replicas: 4
+        failRequestsGreaterThanOne: true
+    flags:
+      migStrategy: none
+      failOnInitError: true
+      deviceListStrategy:
+        - envvar
+      deviceIDStrategy: uuid
+      nvidiaDriverRoot: /

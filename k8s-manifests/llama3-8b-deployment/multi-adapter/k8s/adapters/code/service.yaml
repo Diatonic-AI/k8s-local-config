@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama3-code-adapter
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-code-adapter
+    component: adapter
+spec:
+  type: ClusterIP
+  selector:
+    app: llama3-code-adapter
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

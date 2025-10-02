@@ -1,0 +1,33 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: llama3-tls-cert
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-multi-adapter
+    component: tls-certificate
+spec:
+  secretName: llama3-tls-cert
+  duration: 2160h # 90 days
+  renewBefore: 360h # 15 days before expiry
+  subject:
+    organizations:
+    - DAC Lab AI
+  commonName: llama3.daclab-ai.local
+  dnsNames:
+  - llama3.daclab-ai.local
+  - "*.llama3.daclab-ai.local"
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+  - server auth
+  - client auth
+  - digital signature
+  - key encipherment

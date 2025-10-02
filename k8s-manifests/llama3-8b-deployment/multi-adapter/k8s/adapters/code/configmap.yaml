@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llama3-code-adapter-config
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-code-adapter
+    component: config
+data:
+  adapter_config.yaml: |
+    adapter:
+      name: "code-generation"
+      base_model: "/models/base/llama-3-8b"
+      adapter_path: "/models/adapters/code"
+      task_type: "code_generation"
+      
+    # Code generation specific settings
+    generation:
+      max_length: 2048
+      temperature: 0.2
+      top_p: 0.95
+      top_k: 50
+      repetition_penalty: 1.1
+      do_sample: true
+      
+    # Code-specific optimizations
+    code:
+      syntax_highlighting: true
+      auto_complete: true
+      language_detection: true
+      supported_languages:
+        - python
+        - javascript
+        - typescript
+        - java
+        - cpp
+        - go
+        - rust
+        - sql
+        - bash
+        - yaml
+        - json
+      
+    # Performance tuning
+    performance:
+      batch_size: 4
+      num_beams: 1
+      early_stopping: false
+      use_cache: true
+      
+    # API settings
+    api:
+      port: 8080
+      host: "0.0.0.0"
+      cors_origins:
+        - "*"
+      max_concurrent_requests: 10
+      timeout_seconds: 120
+      
+  system_prompt.txt: |
+    You are an expert programmer and code assistant. You provide clear, efficient, and well-documented code solutions.
+    
+    Guidelines:
+    - Write clean, readable code following best practices
+    - Include helpful comments for complex logic
+    - Consider edge cases and error handling
+    - Suggest optimizations when appropriate
+    - Follow language-specific conventions
+    - Provide examples when helpful
+    
+    When generating code:
+    1. Understand the requirements thoroughly
+    2. Choose appropriate data structures and algorithms
+    3. Write modular, reusable functions
+    4. Include type hints/annotations where applicable
+    5. Add docstrings and comments
+    6. Consider performance implications

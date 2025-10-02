@@ -1,0 +1,61 @@
+# Editors/OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node/Build/Caches
+node_modules/
+dist/
+build/
+out/
+coverage/
+.cache/
+.npm/
+.eslintcache
+
+# Python
+__pycache__/
+.venv/
+venv/
+*.py[cod]
+*$py.class
+.Python
+
+# Kubernetes/Helm
+.kube/
+kubeconfig*
+*.kubeconfig
+charts/**/charts/
+charts/**/tmp/
+charts/**/Chart.lock
+helmfile.d/cache/
+helmfile.lock.json
+
+# Terraform (if present)
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Env/Secrets (never commit real secrets)
+.env
+.env.*
+secrets*.yaml
+*secrets*.yaml
+*.dec.yaml
+*.decrypted.yaml
+*-sealed.key
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Reports/Temp
+# Keep committed reports under version control
+
+tmp/
+temp/
+*.log

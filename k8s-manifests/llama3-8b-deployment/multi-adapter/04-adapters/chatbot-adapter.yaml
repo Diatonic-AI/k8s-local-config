@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama3-chatbot
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-chatbot
+    component: adapter
+    adapter-type: chatbot
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: llama3-chatbot
+  template:
+    metadata:
+      labels:
+        app: llama3-chatbot
+        component: adapter
+        adapter-type: chatbot
+    spec:
+      initContainers:
+      - name: create-adapter
+        image: ollama/ollama:latest
+        command:
+          - sh
+          - -c
+          - |
+            echo "Creating chatbot adapter..."
+            cat > /tmp/Modelfile << 'MODELFILE'
+            FROM llama3:8b
+            
+            PARAMETER temperature 0.8
+            PARAMETER top_p 0.9
+            PARAMETER top_k 40
+            PARAMETER num_ctx 8192
+            PARAMETER num_predict 2048
+            
+            SYSTEM """You are a helpful, friendly AI assistant focused on natural conversation. 
+            You provide clear, concise answers and ask clarifying questions when needed. 
+            You maintain context throughout the conversation and adapt your tone to match the user's needs.
+            You're knowledgeable about a wide range of topics but admit when you don't know something."""
+            MODELFILE
+            
+            export OLLAMA_MODELS=/adapter-models
+            ollama create llama3-chatbot -f /tmp/Modelfile
+            echo "Chatbot adapter created successfully"
+        env:
+        - name: OLLAMA_MODELS
+          value: /adapter-models
+        volumeMounts:
+        - name: adapter-storage
+          mountPath: /adapter-models
+        - name: base-model
+          mountPath: /models
+          readOnly: true
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "6Gi"
+            cpu: "4"
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+        env:
+        - name: OLLAMA_MODELS
+          value: /adapter-models:/models
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        - name: OLLAMA_ORIGINS
+          value: "*"
+        - name: OLLAMA_NUM_PARALLEL
+          value: "2"
+        - name: OLLAMA_MAX_LOADED_MODELS
+          value: "1"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        volumeMounts:
+        - name: adapter-storage
+          mountPath: /adapter-models
+        - name: base-model
+          mountPath: /models
+          readOnly: true
+        resources:
+          requests:
+            memory: "6Gi"
+            cpu: "2"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: adapter-storage
+        persistentVolumeClaim:
+          claimName: llama3-chatbot-adapter
+      - name: base-model
+        persistentVolumeClaim:
+          claimName: llama3-base-model
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama3-chatbot
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-chatbot
+    component: adapter
+spec:
+  type: ClusterIP
+  ports:
+  - port: 11434
+    targetPort: 11434
+    protocol: TCP
+    name: http
+  selector:
+    app: llama3-chatbot

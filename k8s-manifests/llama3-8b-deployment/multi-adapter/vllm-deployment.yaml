@@ -1,0 +1,158 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama3-vllm
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-vllm
+    engine: vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama3-vllm
+  template:
+    metadata:
+      labels:
+        app: llama3-vllm
+        engine: vllm
+    spec:
+      runtimeClassName: nvidia  # Enable NVIDIA Container Runtime
+      nodeSelector:
+        kubernetes.io/hostname: daclab-asus  # GPU node
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:latest
+        command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+        args:
+        - --model
+        - meta-llama/Meta-Llama-3-8B-Instruct
+        - --tensor-parallel-size
+        - "2"  # Split model across BOTH GPUs
+        - --gpu-memory-utilization
+        - "0.90"  # Use 90% of GPU memory (leave some for system)
+        - --max-model-len
+        - "8192"  # Context length
+        - --port
+        - "8000"
+        - --host
+        - "0.0.0.0"
+        - --dtype
+        - "auto"  # Use best precision (FP16/BF16)
+        - --max-num-seqs
+        - "256"  # Handle many concurrent requests
+        - --enable-chunked-prefill
+        - --disable-log-requests  # Reduce logging overhead
+        - --trust-remote-code
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0,1"  # Both GPUs visible
+        - name: VLLM_ATTENTION_BACKEND
+          value: "FLASH_ATTN"  # Use Flash Attention 2
+        - name: NCCL_DEBUG
+          value: "WARN"  # Reduce NCCL logging
+        - name: HF_HOME
+          value: /tmp/huggingface  # Cache location
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "16"
+            nvidia.com/gpu: "2"
+          limits:
+            memory: "24Gi"
+            cpu: "32"
+            nvidia.com/gpu: "2"
+        volumeMounts:
+        - name: cache
+          mountPath: /tmp/huggingface
+        - name: shm
+          mountPath: /dev/shm  # Shared memory for tensor parallelism
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180  # Model loading takes time
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 200
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: cache
+        emptyDir:
+          sizeLimit: 20Gi
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Gi  # Shared memory for multi-GPU communication
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama3-vllm
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-vllm
+spec:
+  type: ClusterIP
+  selector:
+    app: llama3-vllm
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llama3-vllm
+  namespace: llama3-multi-adapter
+  annotations:
+    cert-manager.io/cluster-issuer: "selfsigned-cluster-issuer"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - vllm.local
+    - llama3-vllm.local
+    secretName: vllm-tls
+  rules:
+  - host: vllm.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: llama3-vllm
+            port:
+              number: 8000
+  - host: llama3-vllm.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: llama3-vllm
+            port:
+              number: 8000

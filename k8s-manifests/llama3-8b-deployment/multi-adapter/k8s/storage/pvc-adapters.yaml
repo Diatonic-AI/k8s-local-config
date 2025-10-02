@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-chatbot-adapter
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-chatbot-adapter
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-code-adapter
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-code-adapter
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-rag-adapter
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-rag-adapter
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama3-microservices-adapter
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-microservices-adapter
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 20Gi

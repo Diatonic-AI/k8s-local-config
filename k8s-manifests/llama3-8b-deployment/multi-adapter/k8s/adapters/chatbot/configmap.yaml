@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llama3-chatbot-adapter-config
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-chatbot-adapter
+    component: config
+data:
+  adapter_config.yaml: |
+    adapter:
+      name: "chatbot-conversation"
+      base_model: "/models/base/llama-3-8b"
+      adapter_path: "/models/adapters/chatbot"
+      task_type: "conversation"
+    
+    # Conversation-specific settings
+    generation:
+      max_length: 1024
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 50
+      repetition_penalty: 1.2
+      do_sample: true
+      num_return_sequences: 1
+      
+    # Conversation context
+    conversation:
+      max_turns: 10
+      context_window: 4096
+      maintain_history: true
+      system_message: "You are a helpful, friendly, and knowledgeable AI assistant."
+      
+    # Performance tuning
+    performance:
+      batch_size: 2
+      use_cache: true
+      enable_streaming: false
+      
+    # API settings
+    api:
+      port: 8080
+      host: "0.0.0.0"
+      cors_origins:
+        - "*"
+      max_concurrent_requests: 10
+      timeout_seconds: 60
+      
+  system_prompt.txt: |
+    You are a helpful AI assistant designed to have natural, engaging conversations.
+    
+    Your personality:
+    - Friendly and approachable
+    - Knowledgeable but humble
+    - Patient and understanding
+    - Curious and engaged
+    
+    Guidelines:
+    - Keep responses conversational and natural
+    - Ask follow-up questions when appropriate
+    - Acknowledge when you don't know something
+    - Be concise but comprehensive
+    - Maintain conversation context
+    - Show empathy and understanding
+    
+    Conversation style:
+    - Use a warm, friendly tone
+    - Adapt to the user's communication style
+    - Provide helpful examples when relevant
+    - Encourage further questions
+    - Remember important details from the conversation

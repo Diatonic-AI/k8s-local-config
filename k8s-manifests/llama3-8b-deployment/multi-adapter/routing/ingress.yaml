@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ollama-multi-adapter
+  namespace: llama3-multi-adapter
+  labels:
+    app.kubernetes.io/part-of: ai-inference
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ollama.local
+    http:
+      paths:
+      # Base model (no adapter)
+      - path: /base(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ollama-base
+            port:
+              number: 11434
+      # Chatbot adapter
+      - path: /chatbot(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ollama-chatbot
+            port:
+              number: 11434
+      # Code adapter
+      - path: /code(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ollama-code
+            port:
+              number: 11434
+      # Summarization adapter
+      - path: /summarization(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ollama-summarization
+            port:
+              number: 11434
+      # Default: route to base
+      - path: /(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ollama-base
+            port:
+              number: 11434

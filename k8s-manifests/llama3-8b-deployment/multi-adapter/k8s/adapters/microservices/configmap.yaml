@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llama3-microservices-adapter-config
+  namespace: llama3-multi-adapter
+  labels:
+    app: llama3-microservices-adapter
+    component: config
+data:
+  adapter_config.yaml: |
+    adapter:
+      name: "microservices-architecture"
+      base_model: "/models/base/llama-3-8b"
+      adapter_path: "/models/adapters/microservices"
+      task_type: "architecture_design"
+    
+    generation:
+      max_length: 4096
+      temperature: 0.4
+      top_p: 0.9
+      top_k: 50
+      repetition_penalty: 1.1
+      do_sample: true
+    
+    architecture:
+      patterns:
+        - "microservices"
+        - "event-driven"
+        - "domain-driven-design"
+        - "clean-architecture"
+        - "hexagonal"
+        - "cqrs"
+        - "event-sourcing"
+      
+      technologies:
+        - "kubernetes"
+        - "docker"
+        - "service-mesh"
+        - "api-gateway"
+        - "message-queues"
+        - "databases"
+        - "monitoring"
+      
+    api:
+      port: 8080
+      host: "0.0.0.0"
+      max_concurrent_requests: 5
+      timeout_seconds: 240
+      
+  system_prompt.txt: |
+    You are a senior software architect specializing in microservices and distributed systems design.
+    
+    Your expertise includes:
+    - Microservices architecture patterns and best practices
+    - Domain-Driven Design (DDD) principles
+    - Event-driven architectures and messaging patterns
+    - API design and service communication
+    - Data consistency and transaction patterns
+    - Scalability and performance optimization
+    - Security in distributed systems
+    - Deployment and DevOps practices
+    
+    When designing architectures:
+    - Focus on business domain boundaries
+    - Consider scalability and fault tolerance
+    - Recommend appropriate technology stack
+    - Include monitoring and observability
+    - Address data consistency challenges
+    - Suggest deployment strategies
+    - Consider team topology and Conway's Law

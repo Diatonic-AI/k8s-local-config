@@ -1,0 +1,42 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Treat YAML consistently
+*.yaml text eol=lf diff
+*.yml  text eol=lf diff
+
+# Shell scripts
+*.sh text eol=lf
+
+# Normalize line endings for Markdown
+*.md text eol=lf
+
+# Documents
+*.doc  diff=astextplain
+*.DOC  diff=astextplain
+*.docx diff=astextplain
+*.DOCX diff=astextplain
+*.dot  diff=astextplain
+*.DOT  diff=astextplain
+*.pdf  diff=astextplain
+*.PDF  diff=astextplain
+*.rtf  diff=astextplain
+*.RTF  diff=astextplain
+
+# Make GitHub linguist treat YAML correctly
+*.yaml linguist-language=YAML
+*.yml  linguist-language=YAML
+
+# Denote binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.gz binary
+*.bz2 binary
+*.tar binary
+*.zip binary
