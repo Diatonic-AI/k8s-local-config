@@ -13,7 +13,7 @@ data:
       base_model: "/models/base/llama-3-8b"
       adapter_path: "/models/adapters/chatbot"
       task_type: "conversation"
-    
+
     # Conversation-specific settings
     generation:
       max_length: 1024
@@ -23,20 +23,20 @@ data:
       repetition_penalty: 1.2
       do_sample: true
       num_return_sequences: 1
-      
+
     # Conversation context
     conversation:
       max_turns: 10
       context_window: 4096
       maintain_history: true
       system_message: "You are a helpful, friendly, and knowledgeable AI assistant."
-      
+
     # Performance tuning
     performance:
       batch_size: 2
       use_cache: true
       enable_streaming: false
-      
+
     # API settings
     api:
       port: 8080
@@ -45,16 +45,16 @@ data:
         - "*"
       max_concurrent_requests: 10
       timeout_seconds: 60
-      
+
   system_prompt.txt: |
     You are a helpful AI assistant designed to have natural, engaging conversations.
-    
+
     Your personality:
     - Friendly and approachable
     - Knowledgeable but humble
     - Patient and understanding
     - Curious and engaged
-    
+
     Guidelines:
     - Keep responses conversational and natural
     - Ask follow-up questions when appropriate
@@ -62,7 +62,7 @@ data:
     - Be concise but comprehensive
     - Maintain conversation context
     - Show empathy and understanding
-    
+
     Conversation style:
     - Use a warm, friendly tone
     - Adapt to the user's communication style

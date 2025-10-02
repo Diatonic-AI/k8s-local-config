@@ -19,28 +19,39 @@ spec:
         component: adapter
         adapter-type: code
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       # Initialize adapter from base model
       initContainers:
       - name: init-code-adapter
-        image: huggingface/transformers-pytorch-gpu:latest
-        command: ["/bin/bash", "-c"]
+        image: huggingface/transformers-pytorch-gpu:4.38.0
+        command:
+        - /bin/bash
+        - -c
         args:
           - |
             set -e
             echo "Initializing code generation adapter..."
-            
+
             # Check if adapter already exists
             if [ -d "/adapter-data/adapter_config.json" ]; then
               echo "Code adapter already exists, skipping initialization"
               exit 0
             fi
-            
+
             # Create adapter directory
-            mkdir -p /adapter-data
-            
+            install -d -m 0750 -o 1001 -g 1001 /adapter-data
+
             # Copy base model for fine-tuning reference
             echo "Setting up code adapter configuration..."
-            
+
             # Create adapter config (LoRA configuration for code generation)
             cat > /adapter-data/adapter_config.json << EOF
             {
@@ -55,7 +66,7 @@ spec:
               "base_model_name_or_path": "/models/base/llama-3-8b"
             }
             EOF
-            
+
             # Create training config for code generation
             cat > /adapter-data/training_args.json << EOF
             {
@@ -70,7 +81,7 @@ spec:
               "task_type": "code_generation"
             }
             EOF
-            
+
             echo "Code adapter initialized successfully"
         volumeMounts:
         - name: adapter-storage
@@ -78,6 +89,17 @@ spec:
         - name: base-model
           mountPath: /models/base
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             memory: "2Gi"
@@ -85,24 +107,29 @@ spec:
           limits:
             memory: "4Gi"
             cpu: "2"
-      
+
       containers:
       - name: code-adapter
-        image: huggingface/transformers-pytorch-gpu:latest
-        command: ["/bin/bash", "-c"]
+        image: huggingface/transformers-pytorch-gpu:4.38.0
+        command:
+        - /bin/bash
+        - -c
         args:
           - |
             set -e
             echo "Starting Code Generation Adapter Service..."
-            
-            # Install required packages
+
+            export PYTHONPATH=/opt/deps:$PYTHONPATH
+
+            # Install required packages into writable volume
             pip install --no-cache-dir \
+              --target /opt/deps \
               peft==0.7.0 \
               bitsandbytes==0.41.3 \
               fastapi==0.104.1 \
               uvicorn==0.24.0 \
               pydantic==2.5.0
-            
+
             # Create serving script
             cat > /tmp/serve_code_adapter.py << 'PYEOF'
             import os
@@ -112,25 +139,25 @@ spec:
             from fastapi import FastAPI, HTTPException
             from pydantic import BaseModel
             import uvicorn
-            
+
             app = FastAPI(title="Llama3 Code Adapter API")
-            
+
             class GenerateRequest(BaseModel):
                 prompt: str
                 max_length: int = 2048
                 temperature: float = 0.2
                 top_p: float = 0.95
                 language: str = "python"
-            
+
             class GenerateResponse(BaseModel):
                 generated_text: str
                 language: str
-            
+
             # Load model and adapter
             print("Loading base model...")
             base_model_path = "/models/base/llama-3-8b"
             adapter_path = "/models/adapters/code"
-            
+
             # Quantization config for efficient inference
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -138,37 +165,37 @@ spec:
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_use_double_quant=True
             )
-            
+
             model = AutoModelForCausalLM.from_pretrained(
                 base_model_path,
                 quantization_config=bnb_config,
                 device_map="auto",
                 trust_remote_code=True
             )
-            
+
             # Load adapter if exists
             if os.path.exists(adapter_path):
                 print("Loading code adapter...")
                 model = PeftModel.from_pretrained(model, adapter_path)
-            
+
             tokenizer = AutoTokenizer.from_pretrained(base_model_path)
             tokenizer.pad_token = tokenizer.eos_token
-            
+
             print("Model and adapter loaded successfully!")
-            
+
             @app.get("/health")
             def health_check():
                 return {"status": "healthy", "adapter": "code-generation"}
-            
+
             @app.post("/generate", response_model=GenerateResponse)
             def generate_code(request: GenerateRequest):
                 try:
                     # Format prompt for code generation
                     system_prompt = f"You are a {request.language} expert. Generate clean, efficient code."
                     full_prompt = f"{system_prompt}\n\nUser: {request.prompt}\n\nAssistant:"
-                    
+
                     inputs = tokenizer(full_prompt, return_tensors="pt").to(model.device)
-                    
+
                     with torch.no_grad():
                         outputs = model.generate(
                             **inputs,
@@ -178,22 +205,22 @@ spec:
                             do_sample=True,
                             pad_token_id=tokenizer.eos_token_id
                         )
-                    
+
                     generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
                     # Extract only the assistant's response
                     generated_text = generated.split("Assistant:")[-1].strip()
-                    
+
                     return GenerateResponse(
                         generated_text=generated_text,
                         language=request.language
                     )
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=str(e))
-            
+
             if __name__ == "__main__":
                 uvicorn.run(app, host="0.0.0.0", port=8080)
             PYEOF
-            
+
             # Start the service
             python /tmp/serve_code_adapter.py
         ports:
@@ -215,6 +242,19 @@ spec:
           mountPath: /models/adapters/code
         - name: config
           mountPath: /config
+        - name: python-deps
+          mountPath: /opt/deps
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             memory: "8Gi"
@@ -240,7 +280,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-      
+
       volumes:
       - name: base-model
         persistentVolumeClaim:
@@ -251,7 +291,10 @@ spec:
       - name: config
         configMap:
           name: llama3-code-adapter-config
-      
+      - name: python-deps
+        emptyDir:
+          sizeLimit: 5Gi
+
       affinity:
         # Prefer to spread across nodes
         podAntiAffinity:

@@ -29,17 +29,26 @@ spec:
           value: "true"
         securityContext:
           allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
           capabilities:
-            drop: ["ALL"]
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - name: device-plugin
           mountPath: /var/lib/kubelet/device-plugins
+          readOnly: true
         - name: config
           mountPath: /etc/nvidia
+          readOnly: true
       volumes:
       - name: device-plugin
         hostPath:
           path: /var/lib/kubelet/device-plugins
+          type: Directory
       - name: config
         configMap:
           name: device-plugin-config

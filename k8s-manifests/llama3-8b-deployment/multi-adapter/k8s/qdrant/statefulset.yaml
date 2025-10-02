@@ -18,6 +18,16 @@ spec:
         app: qdrant
         component: vector-db
     spec:
+      serviceAccountName: qdrant-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: qdrant
         image: qdrant/qdrant:v1.7.4
@@ -42,6 +52,17 @@ spec:
           mountPath: /qdrant/snapshots
         - name: config
           mountPath: /qdrant/config
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             memory: "2Gi"
@@ -65,7 +86,7 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
-      
+
       volumes:
       - name: qdrant-storage
         persistentVolumeClaim:

@@ -59,7 +59,7 @@ spec:
           runAsUser: 0
       containers:
       - name: ollama
-        image: ollama/ollama:latest
+        image: ollama/ollama:0.3.11
         imagePullPolicy: Always
         ports:
         - containerPort: 11434
@@ -236,7 +236,7 @@ spec:
           runAsUser: 0
       containers:
       - name: ollama
-        image: ollama/ollama:latest
+        image: ollama/ollama:0.3.11
         imagePullPolicy: Always
         ports:
         - containerPort: 11434

@@ -11,39 +11,39 @@ metadata:
   annotations:
     # cert-manager annotations
     cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Change to 'letsencrypt-staging' for testing
-    
+
     # Nginx ingress annotations
     nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    
+
     # SSL/TLS specific
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
     nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
-    
+
     # Security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
       more_set_headers "X-Content-Type-Options: nosniff";
       more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-XSS-Protection: 1; mode=block";
       more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
-    
+
     # Rate limiting
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-connections: "100"
 
 spec:
   ingressClassName: nginx
-  
+
   # TLS configuration
   tls:
   - hosts:
     - ollama.yourdomain.com  # CHANGE THIS to your actual domain
     secretName: ollama-tls-cert  # cert-manager will create this secret
-  
+
   rules:
   - host: ollama.yourdomain.com  # CHANGE THIS to your actual domain
     http:
@@ -56,7 +56,7 @@ spec:
             name: ollama-base
             port:
               number: 11434
-      
+
       # Chatbot adapter
       - path: /chatbot(/|$)(.*)
         pathType: ImplementationSpecific
@@ -65,7 +65,7 @@ spec:
             name: ollama-chatbot
             port:
               number: 11434
-      
+
       # Code adapter
       - path: /code(/|$)(.*)
         pathType: ImplementationSpecific
@@ -74,7 +74,7 @@ spec:
             name: ollama-code
             port:
               number: 11434
-      
+
       # Summarization adapter
       - path: /summarization(/|$)(.*)
         pathType: ImplementationSpecific
@@ -83,7 +83,7 @@ spec:
             name: ollama-summarization
             port:
               number: 11434
-      
+
       # Health check endpoint (base)
       - path: /health(/|$)(.*)
         pathType: ImplementationSpecific
@@ -92,7 +92,7 @@ spec:
             name: ollama-base
             port:
               number: 11434
-      
+
       # Default: route to base
       - path: /(.*)
         pathType: ImplementationSpecific

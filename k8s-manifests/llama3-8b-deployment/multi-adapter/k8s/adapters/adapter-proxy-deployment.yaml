@@ -17,16 +17,37 @@ spec:
         app: adapter-proxy
         component: routing
     spec:
+      serviceAccountName: adapter-proxy-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: nginx-proxy
-        image: nginx:alpine
+        image: nginx:1.25.3-alpine
         ports:
-        - containerPort: 80
+        - containerPort: 8080
           name: http
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/nginx.conf
           subPath: nginx.conf
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 101
+          runAsGroup: 101
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             cpu: "500m"
@@ -37,16 +58,16 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5
-      
+
       volumes:
       - name: nginx-config
         configMap:
@@ -64,7 +85,7 @@ data:
         use epoll;
         multi_accept on;
     }
-    
+
     http {
         upstream ollama_backend {
             least_conn;
@@ -72,39 +93,39 @@ data:
             keepalive 256;
             keepalive_requests 10000;
         }
-        
+
         # Logging
         access_log /var/log/nginx/access.log;
         error_log /var/log/nginx/error.log;
-        
+
         # Performance settings
         sendfile on;
         tcp_nopush on;
         tcp_nodelay on;
         keepalive_timeout 300;
         keepalive_requests 10000;
-        
+
         # Timeouts for long-running AI requests
         proxy_connect_timeout 10s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
-        
+
         # Buffer settings
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_http_version 1.1;
-        
+
         server {
-            listen 80;
+            listen 8080;
             server_name _;
-            
+
             # Health check endpoint
             location /health {
                 access_log off;
                 return 200 "OK\n";
                 add_header Content-Type text/plain;
             }
-            
+
             # Chatbot adapter route
             location /chatbot/ {
                 rewrite ^/chatbot/(.*) /$1 break;
@@ -115,7 +136,7 @@ data:
                 proxy_set_header X-Adapter-Type "chatbot";
                 proxy_set_header Connection "";
             }
-            
+
             # Code adapter route
             location /code/ {
                 rewrite ^/code/(.*) /$1 break;
@@ -126,7 +147,7 @@ data:
                 proxy_set_header X-Adapter-Type "code";
                 proxy_set_header Connection "";
             }
-            
+
             # RAG adapter route
             location /rag/ {
                 rewrite ^/rag/(.*) /$1 break;
@@ -137,7 +158,7 @@ data:
                 proxy_set_header X-Adapter-Type "rag";
                 proxy_set_header Connection "";
             }
-            
+
             # Microservices/Architecture adapter route
             location /architecture/ {
                 rewrite ^/architecture/(.*) /$1 break;
@@ -148,7 +169,7 @@ data:
                 proxy_set_header X-Adapter-Type "architecture";
                 proxy_set_header Connection "";
             }
-            
+
             # Base/default route
             location / {
                 proxy_pass http://ollama_backend;
@@ -170,8 +191,8 @@ spec:
   selector:
     app: adapter-proxy
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 8080
+    targetPort: 8080
     protocol: TCP
     name: http
   type: ClusterIP

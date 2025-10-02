@@ -13,7 +13,7 @@ data:
       base_model: "/models/base/llama-3-8b"
       adapter_path: "/models/adapters/rag"
       task_type: "retrieval_augmented_generation"
-    
+
     # RAG-specific settings
     retrieval:
       vector_db_host: "qdrant-api.llama3-multi-adapter.svc.cluster.local"
@@ -22,20 +22,20 @@ data:
       top_k: 5
       score_threshold: 0.7
       max_context_length: 4096
-      
+
     # Embedding configuration
     embeddings:
       model: "sentence-transformers/all-MiniLM-L6-v2"
       dimension: 384
       batch_size: 32
       device: "cuda"
-      
+
     # Chunking strategy
     chunking:
       chunk_size: 512
       chunk_overlap: 128
       separator: "\n\n"
-      
+
     # Generation settings optimized for RAG
     generation:
       max_length: 2048
@@ -45,7 +45,7 @@ data:
       repetition_penalty: 1.15
       do_sample: true
       num_return_sequences: 1
-      
+
     # Context assembly
     context:
       prepend_system_prompt: true
@@ -53,17 +53,17 @@ data:
       format_template: |
         Context from knowledge base:
         {retrieved_context}
-        
+
         User Question: {user_query}
-        
-        Assistant: Based on the provided context, 
-      
+
+        Assistant: Based on the provided context,
+
     # Performance tuning
     performance:
       batch_size: 2
       use_cache: true
       enable_streaming: false
-      
+
     # API settings
     api:
       port: 8080
@@ -72,24 +72,24 @@ data:
         - "*"
       max_concurrent_requests: 8
       timeout_seconds: 180
-      
+
   system_prompt.txt: |
     You are a knowledgeable AI assistant with access to a comprehensive knowledge base.
-    
+
     Your role:
     - Use the retrieved context to provide accurate, evidence-based answers
     - Cite sources when information comes from specific documents
     - Acknowledge when retrieved context doesn't contain the answer
     - Combine multiple sources coherently when relevant
     - Maintain factual accuracy and avoid hallucination
-    
+
     Guidelines:
     - Ground your responses in the provided context
     - Be clear about confidence levels
     - Suggest follow-up questions when appropriate
     - Explain complex topics using information from the knowledge base
     - Reference document titles or sources when helpful
-    
+
     Context handling:
     - Prioritize most relevant retrieved passages
     - Synthesize information from multiple sources

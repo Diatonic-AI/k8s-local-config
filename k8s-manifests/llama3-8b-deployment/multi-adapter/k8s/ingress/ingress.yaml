@@ -7,100 +7,73 @@ metadata:
     app: llama3-multi-adapter
     component: ingress
   annotations:
-    # Nginx-specific annotations
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    
-    # CORS configuration
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.example.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/oauth2/start?rd=$request_uri"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
-    nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length,Content-Range"
-    nginx.ingress.kubernetes.io/cors-max-age: "86400"
-    
-    # Rate limiting
-    nginx.ingress.kubernetes.io/limit-rps: "10"
-    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
-    nginx.ingress.kubernetes.io/limit-connections: "20"
-    
-    # Timeouts for LLM inference
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://console.example.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization,Content-Type"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
-    
-    # Request size limits (for long prompts)
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    
-    # Security headers
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-connections: "40"
+    nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Strict-Transport-Security: max-age=63072000; includeSubDomains; preload";
+      more_set_headers "Content-Security-Policy: default-src 'none'; connect-src 'self';";
+      more_set_headers "Referrer-Policy: no-referrer";
       more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-Content-Type-Options: nosniff";
       more_set_headers "X-XSS-Protection: 1; mode=block";
-      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
-    
-    # SSL/TLS settings (for cert-manager)
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    
 spec:
   ingressClassName: nginx
-  
-  # TLS configuration
   tls:
   - hosts:
-    - llama3.daclab-ai.local  # Updated to local development domain
-    secretName: llama3-tls-cert
-  
+    - llama3.example.com
+    secretName: llama3-multi-adapter-tls
   rules:
-  - host: llama3.daclab-ai.local  # Updated to local development domain
+  - host: llama3.example.com
     http:
       paths:
-      # Chatbot adapter
       - path: /chatbot(/|$)(.*)
-        pathType: ImplementationSpecific
+        pathType: Prefix
         backend:
           service:
             name: llama3-chatbot-adapter
             port:
               number: 8080
-      
-      # Code generation adapter
       - path: /code(/|$)(.*)
-        pathType: ImplementationSpecific
+        pathType: Prefix
         backend:
           service:
             name: llama3-code-adapter
             port:
               number: 8080
-      
-      # RAG adapter
       - path: /rag(/|$)(.*)
-        pathType: ImplementationSpecific
+        pathType: Prefix
         backend:
           service:
             name: llama3-rag-adapter
             port:
               number: 8080
-      
-      # Microservices architecture adapter
       - path: /architecture(/|$)(.*)
-        pathType: ImplementationSpecific
+        pathType: Prefix
         backend:
           service:
             name: llama3-microservices-adapter
             port:
               number: 8080
-      
-      # Base model (direct access, limited rate)
       - path: /base(/|$)(.*)
-        pathType: ImplementationSpecific
+        pathType: Prefix
         backend:
           service:
             name: llama3-base-model
             port:
               number: 8080
-      
-      # Health check endpoint
       - path: /health
         pathType: Exact
         backend:
@@ -109,7 +82,6 @@ spec:
             port:
               number: 8080
 ---
-# ConfigMap for custom Nginx configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -117,12 +89,7 @@ metadata:
   namespace: llama3-multi-adapter
 data:
   custom-headers.conf: |
-    # Custom headers for all responses
-    add_header X-Powered-By "Llama3-Multi-Adapter" always;
-    add_header X-Adapter-Version "1.0.0" always;
-    
+    add_header X-Powered-By "" always;
   rate-limit.conf: |
-    # Rate limiting zones
-    limit_req_zone $binary_remote_addr zone=general:10m rate=10r/s;
-    limit_req_zone $binary_remote_addr zone=inference:10m rate=5r/s;
+    limit_req_zone $binary_remote_addr zone=general:10m rate=20r/s;
     limit_conn_zone $binary_remote_addr zone=connections:10m;

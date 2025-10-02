@@ -24,13 +24,17 @@ spec:
         app.kubernetes.io/component: base-model
         gpu-id: "0"  # Pin to GPU 0
     spec:
+      serviceAccountName: ollama-base-sa
+      automountServiceAccountToken: false
       securityContext:
+        runAsNonRoot: true
         runAsUser: 1001
         runAsGroup: 1001
         fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
-      
+
       initContainers:
       - name: setup-permissions
         image: busybox:1.36
@@ -38,25 +42,30 @@ spec:
         args:
         - |
           echo "Setting up base model directories..."
-          mkdir -p /models/.ollama/models
+          install -d -m 0750 -o 1001 -g 1001 /models/.ollama/models
           chown -R 1001:1001 /models
-          chmod -R 755 /models
           echo "Setup complete"
         volumeMounts:
         - name: base-models
           mountPath: /models
         securityContext:
           runAsUser: 0
-      
+          runAsGroup: 0
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
       containers:
       - name: ollama
-        image: ollama/ollama:latest
-        imagePullPolicy: Always
+        image: ollama/ollama:0.3.11
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 11434
           name: http
           protocol: TCP
-        
+
         env:
         - name: OLLAMA_HOST
           value: "0.0.0.0"
@@ -86,22 +95,23 @@ spec:
           value: "1"  # Enable Flash Attention
         - name: OLLAMA_KV_CACHE_TYPE
           value: "f16"  # FP16 for speed
-        
+
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
           runAsUser: 1001
           runAsGroup: 1001
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
           seccompProfile:
             type: RuntimeDefault
-        
+
         volumeMounts:
         - name: base-models
           mountPath: /models
-        
+
         resources:
           requests:
             cpu: "8000m"      # 8 cores base
@@ -111,7 +121,7 @@ spec:
             cpu: "16000m"     # Burst to 16 cores
             memory: "32Gi"    # Burst to 32GB
             nvidia.com/gpu: 1
-        
+
         livenessProbe:
           httpGet:
             path: /api/tags
@@ -120,7 +130,7 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
-        
+
         readinessProbe:
           httpGet:
             path: /api/tags
@@ -129,22 +139,22 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-      
+
       volumes:
       - name: base-models
         persistentVolumeClaim:
           claimName: llama3-base-models-pvc
-      
+
       nodeSelector:
         nvidia.com/gpu.present: "true"
-      
+
       runtimeClassName: nvidia
-      
+
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
         effect: NoSchedule
-      
+
       affinity:
         # Prefer nodes with GPU 0 available
         nodeAffinity:

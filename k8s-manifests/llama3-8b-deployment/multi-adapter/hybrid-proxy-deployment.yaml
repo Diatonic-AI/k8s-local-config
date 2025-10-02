@@ -27,7 +27,7 @@ data:
     LOCAL_VLLM_URL = os.getenv("LOCAL_VLLM_URL", "http://llama3-vllm:8000")
     HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct")
     HF_TOKEN = os.getenv("HF_TOKEN")  # From Kubernetes secret
-    
+
     LOCAL_TIMEOUT = int(os.getenv("LOCAL_TIMEOUT", "30"))
     HF_TIMEOUT = int(os.getenv("HF_TIMEOUT", "60"))
     PREFER_LOCAL = os.getenv("PREFER_LOCAL", "true").lower() == "true"
@@ -52,11 +52,11 @@ data:
                     prompt_parts.append(f"User: {content}")
                 elif role == "assistant":
                     prompt_parts.append(f"Assistant: {content}")
-            
+
             prompt = "\n".join(prompt_parts)
             if not prompt:
                 return None, "Empty prompt"
-            
+
             # Use Ollama's native /api/generate endpoint
             ollama_payload = {
                 "model": "llama3:8b",
@@ -68,7 +68,7 @@ data:
                     "num_predict": payload.get("max_tokens", 512)
                 }
             }
-            
+
             timeout = ClientTimeout(total=LOCAL_TIMEOUT)
             async with session.post(
                 f"{LOCAL_VLLM_URL}/api/generate",
@@ -78,7 +78,7 @@ data:
                 if resp.status == 200:
                     ollama_response = await resp.json()
                     response_text = ollama_response.get("response", "")
-                    
+
                     # Convert back to OpenAI format
                     openai_format = {
                         "id": "ollama-" + os.urandom(8).hex(),
@@ -112,12 +112,12 @@ data:
         """Call HuggingFace Inference API with Pro resources"""
         if not HF_TOKEN:
             return None, "HF_TOKEN not configured"
-        
+
         try:
             # Convert OpenAI format to HF format
             messages = payload.get("messages", [])
             prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
-            
+
             hf_payload = {
                 "inputs": prompt,
                 "parameters": {
@@ -127,12 +127,12 @@ data:
                     "return_full_text": False
                 }
             }
-            
+
             headers = {
                 "Authorization": f"Bearer {HF_TOKEN}",
                 "Content-Type": "application/json"
             }
-            
+
             timeout = ClientTimeout(total=HF_TIMEOUT)
             async with session.post(
                 HF_API_URL,
@@ -177,25 +177,25 @@ data:
         try:
             payload = await request.json()
             logger.info(f"Request received: {payload.get('messages', [{}])[0].get('content', 'N/A')[:50]}...")
-            
+
             async with ClientSession() as session:
                 if PREFER_LOCAL:
                     # Try local first
                     logger.info("Attempting local vLLM...")
                     result, error = await call_local_vllm(session, payload)
-                    
+
                     if result:
                         logger.info("✅ Response from local vLLM")
                         result["provider"] = "local_vllm"
                         return web.json_response(result)
-                    
+
                     logger.warning(f"Local vLLM failed: {error}, trying HuggingFace Cloud...")
                     result, error = await call_huggingface_api(session, payload)
-                    
+
                     if result:
                         logger.info("✅ Response from HuggingFace Cloud")
                         return web.json_response(result)
-                    
+
                     logger.error(f"Both backends failed. HF error: {error}")
                     return web.json_response(
                         {"error": f"All backends failed. Last error: {error}"},
@@ -205,25 +205,25 @@ data:
                     # Cloud-first mode
                     logger.info("Attempting HuggingFace Cloud (cloud-first mode)...")
                     result, error = await call_huggingface_api(session, payload)
-                    
+
                     if result:
                         logger.info("✅ Response from HuggingFace Cloud")
                         return web.json_response(result)
-                    
+
                     logger.warning(f"HuggingFace Cloud failed: {error}, trying local vLLM...")
                     result, error = await call_local_vllm(session, payload)
-                    
+
                     if result:
                         logger.info("✅ Response from local vLLM")
                         result["provider"] = "local_vllm"
                         return web.json_response(result)
-                    
+
                     logger.error(f"Both backends failed. Local error: {error}")
                     return web.json_response(
                         {"error": f"All backends failed. Last error: {error}"},
                         status=503
                     )
-        
+
         except Exception as e:
             logger.exception("Unexpected error in chat_completions")
             return web.json_response({"error": str(e)}, status=500)
@@ -246,13 +246,13 @@ data:
         app.router.add_get("/health", health_check)
         app.router.add_get("/v1/models", models)
         app.router.add_post("/v1/chat/completions", chat_completions)
-        
+
         port = int(os.getenv("PORT", "8080"))
         logger.info(f"🚀 Starting hybrid proxy on port {port}")
         logger.info(f"   Local vLLM: {LOCAL_VLLM_URL}")
         logger.info(f"   HF API: {HF_API_URL}")
         logger.info(f"   Strategy: {'Local-first' if PREFER_LOCAL else 'Cloud-first'}")
-        
+
         web.run_app(app, host="0.0.0.0", port=port)
 
     if __name__ == "__main__":
@@ -275,14 +275,26 @@ spec:
       labels:
         app: hybrid-proxy
     spec:
+      serviceAccountName: hybrid-proxy-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: proxy
-        image: python:3.11-slim
+        image: python:3.11.8-slim
         command:
         - sh
         - -c
         - |
-          pip install -q aiohttp
+          set -e
+          export PYTHONPATH=/opt/deps:$PYTHONPATH
+          pip install -q --no-cache-dir --target /opt/deps aiohttp
           python3 /app/proxy.py
         env:
         - name: HF_TOKEN
@@ -305,6 +317,17 @@ spec:
         ports:
         - containerPort: 8080
           name: http
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             memory: "256Mi"
@@ -315,6 +338,8 @@ spec:
         volumeMounts:
         - name: proxy-code
           mountPath: /app
+        - name: python-deps
+          mountPath: /opt/deps
         readinessProbe:
           httpGet:
             path: /health
@@ -332,6 +357,9 @@ spec:
         configMap:
           name: hybrid-proxy-config
           defaultMode: 0755
+      - name: python-deps
+        emptyDir:
+          sizeLimit: 1Gi
 ---
 apiVersion: v1
 kind: Service

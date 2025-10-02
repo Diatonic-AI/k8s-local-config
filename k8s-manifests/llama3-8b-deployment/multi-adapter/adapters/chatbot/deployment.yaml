@@ -34,7 +34,7 @@ spec:
         fsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
-      
+
       initContainers:
       - name: setup-permissions
         image: busybox:1.36
@@ -51,16 +51,16 @@ spec:
           mountPath: /adapters
         securityContext:
           runAsUser: 0
-      
+
       containers:
       - name: ollama
-        image: ollama/ollama:latest
+        image: ollama/ollama:0.3.11
         imagePullPolicy: Always
         ports:
         - containerPort: 11434
           name: http
           protocol: TCP
-        
+
         env:
         - name: OLLAMA_HOST
           value: "0.0.0.0"
@@ -88,7 +88,7 @@ spec:
           value: "256"
         - name: OLLAMA_GPU_MEMORY_FRACTION
           value: "0.2"  # ~4GB VRAM per replica (20GB / 5 pods on GPU 0)
-        
+
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
@@ -99,14 +99,14 @@ spec:
             - ALL
           seccompProfile:
             type: RuntimeDefault
-        
+
         volumeMounts:
         - name: base-models
           mountPath: /models
           readOnly: true  # Read-only access to base models
         - name: adapter-storage
           mountPath: /adapters
-        
+
         resources:
           requests:
             cpu: "2000m"      # 2 cores per replica
@@ -116,7 +116,7 @@ spec:
             cpu: "3000m"      # Burst to 3 cores
             memory: "10Gi"    # Burst to 10GB
             nvidia.com/gpu: 1
-        
+
         livenessProbe:
           httpGet:
             path: /api/tags
@@ -125,7 +125,7 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
-        
+
         readinessProbe:
           httpGet:
             path: /api/tags
@@ -134,7 +134,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-      
+
       volumes:
       - name: base-models
         persistentVolumeClaim:
@@ -142,17 +142,17 @@ spec:
       - name: adapter-storage
         persistentVolumeClaim:
           claimName: llama3-chatbot-adapter-pvc
-      
+
       nodeSelector:
         nvidia.com/gpu.present: "true"
-      
+
       runtimeClassName: nvidia
-      
+
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
         effect: NoSchedule
-      
+
       affinity:
         # Anti-affinity: spread replicas across nodes if possible
         podAntiAffinity:

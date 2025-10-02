@@ -34,7 +34,7 @@ spec:
     spec:
       initContainers:
       - name: init-rag-adapter
-        image: huggingface/transformers-pytorch-gpu:latest
+        image: huggingface/transformers-pytorch-gpu:4.38.0
         command: ["/bin/bash", "-c"]
         args:
           - |
@@ -79,7 +79,7 @@ spec:
       
       containers:
       - name: rag-adapter
-        image: huggingface/transformers-pytorch-gpu:latest
+        image: huggingface/transformers-pytorch-gpu:4.38.0
         command: ["/bin/bash", "-c"]
         args:
           - |
@@ -410,7 +410,7 @@ spec:
     spec:
       initContainers:
       - name: init-microservices-adapter
-        image: huggingface/transformers-pytorch-gpu:latest
+        image: huggingface/transformers-pytorch-gpu:4.38.0
         command: ["/bin/bash", "-c"]
         args:
           - |
@@ -448,7 +448,7 @@ spec:
       
       containers:
       - name: microservices-adapter
-        image: huggingface/transformers-pytorch-gpu:latest
+        image: huggingface/transformers-pytorch-gpu:4.38.0
         command: ["/bin/bash", "-c"]
         args:
           - |

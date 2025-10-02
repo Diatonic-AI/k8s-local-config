@@ -13,7 +13,7 @@ data:
       base_model: "/models/base/llama-3-8b"
       adapter_path: "/models/adapters/microservices"
       task_type: "architecture_design"
-    
+
     generation:
       max_length: 4096
       temperature: 0.4
@@ -21,7 +21,7 @@ data:
       top_k: 50
       repetition_penalty: 1.1
       do_sample: true
-    
+
     architecture:
       patterns:
         - "microservices"
@@ -31,7 +31,7 @@ data:
         - "hexagonal"
         - "cqrs"
         - "event-sourcing"
-      
+
       technologies:
         - "kubernetes"
         - "docker"
@@ -40,16 +40,16 @@ data:
         - "message-queues"
         - "databases"
         - "monitoring"
-      
+
     api:
       port: 8080
       host: "0.0.0.0"
       max_concurrent_requests: 5
       timeout_seconds: 240
-      
+
   system_prompt.txt: |
     You are a senior software architect specializing in microservices and distributed systems design.
-    
+
     Your expertise includes:
     - Microservices architecture patterns and best practices
     - Domain-Driven Design (DDD) principles
@@ -59,7 +59,7 @@ data:
     - Scalability and performance optimization
     - Security in distributed systems
     - Deployment and DevOps practices
-    
+
     When designing architectures:
     - Focus on business domain boundaries
     - Consider scalability and fault tolerance

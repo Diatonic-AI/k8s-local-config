@@ -13,7 +13,7 @@ data:
       base_model: "/models/base/llama-3-8b"
       adapter_path: "/models/adapters/code"
       task_type: "code_generation"
-      
+
     # Code generation specific settings
     generation:
       max_length: 2048
@@ -22,7 +22,7 @@ data:
       top_k: 50
       repetition_penalty: 1.1
       do_sample: true
-      
+
     # Code-specific optimizations
     code:
       syntax_highlighting: true
@@ -40,14 +40,14 @@ data:
         - bash
         - yaml
         - json
-      
+
     # Performance tuning
     performance:
       batch_size: 4
       num_beams: 1
       early_stopping: false
       use_cache: true
-      
+
     # API settings
     api:
       port: 8080
@@ -56,10 +56,10 @@ data:
         - "*"
       max_concurrent_requests: 10
       timeout_seconds: 120
-      
+
   system_prompt.txt: |
     You are an expert programmer and code assistant. You provide clear, efficient, and well-documented code solutions.
-    
+
     Guidelines:
     - Write clean, readable code following best practices
     - Include helpful comments for complex logic
@@ -67,7 +67,7 @@ data:
     - Suggest optimizations when appropriate
     - Follow language-specific conventions
     - Provide examples when helpful
-    
+
     When generating code:
     1. Understand the requirements thoroughly
     2. Choose appropriate data structures and algorithms

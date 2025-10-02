@@ -21,7 +21,7 @@ spec:
     spec:
       initContainers:
       - name: create-adapter
-        image: ollama/ollama:latest
+        image: ollama/ollama:0.3.11
         command:
           - sh
           - -c
@@ -29,19 +29,19 @@ spec:
             echo "Creating chatbot adapter..."
             cat > /tmp/Modelfile << 'MODELFILE'
             FROM llama3:8b
-            
+
             PARAMETER temperature 0.8
             PARAMETER top_p 0.9
             PARAMETER top_k 40
             PARAMETER num_ctx 8192
             PARAMETER num_predict 2048
-            
-            SYSTEM """You are a helpful, friendly AI assistant focused on natural conversation. 
-            You provide clear, concise answers and ask clarifying questions when needed. 
+
+            SYSTEM """You are a helpful, friendly AI assistant focused on natural conversation.
+            You provide clear, concise answers and ask clarifying questions when needed.
             You maintain context throughout the conversation and adapt your tone to match the user's needs.
             You're knowledgeable about a wide range of topics but admit when you don't know something."""
             MODELFILE
-            
+
             export OLLAMA_MODELS=/adapter-models
             ollama create llama3-chatbot -f /tmp/Modelfile
             echo "Chatbot adapter created successfully"
@@ -63,7 +63,7 @@ spec:
             cpu: "4"
       containers:
       - name: ollama
-        image: ollama/ollama:latest
+        image: ollama/ollama:0.3.11
         ports:
         - containerPort: 11434
           name: http
