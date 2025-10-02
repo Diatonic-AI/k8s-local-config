@@ -49,6 +49,16 @@ spec:
         - --disable-log-requests  # Reduce logging overhead
         - --trust-remote-code
         env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-tokens
+              key: HF_TOKEN_READ
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-tokens
+              key: HF_TOKEN_READ
         - name: CUDA_VISIBLE_DEVICES
           value: "0,1"  # Both GPUs visible
         - name: VLLM_ATTENTION_BACKEND

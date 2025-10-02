@@ -1,0 +1,2 @@
+# Python dependencies for repository tooling and hybrid proxy
+aiohttp>=3.9,<4

@@ -1,0 +1,344 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hybrid-proxy-config
+  namespace: llama3-multi-adapter
+data:
+  proxy.py: |
+    #!/usr/bin/env python3
+    """
+    Hybrid Inference Proxy - Routes to local vLLM or HuggingFace Cloud
+    - Primary: Local vLLM (fastest, private)
+    - Fallback: HuggingFace Inference API (Pro tier with dedicated compute)
+    - No hardcoded secrets - all from environment
+    """
+    import os
+    import json
+    import asyncio
+    from aiohttp import web, ClientSession, ClientTimeout
+    import logging
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    # Configuration from environment (no hardcoding)
+    LOCAL_VLLM_URL = os.getenv("LOCAL_VLLM_URL", "http://llama3-vllm:8000")
+    HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct")
+    HF_TOKEN = os.getenv("HF_TOKEN")  # From Kubernetes secret
+    
+    LOCAL_TIMEOUT = int(os.getenv("LOCAL_TIMEOUT", "30"))
+    HF_TIMEOUT = int(os.getenv("HF_TIMEOUT", "60"))
+    PREFER_LOCAL = os.getenv("PREFER_LOCAL", "true").lower() == "true"
+
+    async def health_check(request):
+        """Health check endpoint"""
+        return web.json_response({"status": "healthy", "service": "hybrid-proxy"})
+
+    async def call_local_vllm(session, payload):
+        """Call local vLLM instance"""
+        try:
+            timeout = ClientTimeout(total=LOCAL_TIMEOUT)
+            async with session.post(
+                f"{LOCAL_VLLM_URL}/v1/chat/completions",
+                json=payload,
+                timeout=timeout
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json(), None
+                else:
+                    error_text = await resp.text()
+                    return None, f"Local vLLM error {resp.status}: {error_text}"
+        except asyncio.TimeoutError:
+            return None, "Local vLLM timeout"
+        except Exception as e:
+            return None, f"Local vLLM exception: {str(e)}"
+
+    async def call_huggingface_api(session, payload):
+        """Call HuggingFace Inference API with Pro resources"""
+        if not HF_TOKEN:
+            return None, "HF_TOKEN not configured"
+        
+        try:
+            # Convert OpenAI format to HF format
+            messages = payload.get("messages", [])
+            prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
+            
+            hf_payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": payload.get("max_tokens", 512),
+                    "temperature": payload.get("temperature", 0.7),
+                    "top_p": payload.get("top_p", 0.9),
+                    "return_full_text": False
+                }
+            }
+            
+            headers = {
+                "Authorization": f"Bearer {HF_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            
+            timeout = ClientTimeout(total=HF_TIMEOUT)
+            async with session.post(
+                HF_API_URL,
+                json=hf_payload,
+                headers=headers,
+                timeout=timeout
+            ) as resp:
+                if resp.status == 200:
+                    hf_response = await resp.json()
+                    # Convert HF format back to OpenAI format
+                    generated_text = hf_response[0].get("generated_text", "")
+                    openai_format = {
+                        "id": "hf-" + os.urandom(8).hex(),
+                        "object": "chat.completion",
+                        "created": int(asyncio.get_event_loop().time()),
+                        "model": "meta-llama/Meta-Llama-3-8B-Instruct",
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": generated_text
+                            },
+                            "finish_reason": "stop"
+                        }],
+                        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        "provider": "huggingface_cloud"
+                    }
+                    return openai_format, None
+                else:
+                    error_text = await resp.text()
+                    return None, f"HuggingFace API error {resp.status}: {error_text}"
+        except asyncio.TimeoutError:
+            return None, "HuggingFace API timeout"
+        except Exception as e:
+            return None, f"HuggingFace API exception: {str(e)}"
+
+    async def chat_completions(request):
+        """
+        Hybrid chat completions endpoint
+        Tries local vLLM first, falls back to HuggingFace Cloud
+        """
+        try:
+            payload = await request.json()
+            logger.info(f"Request received: {payload.get('messages', [{}])[0].get('content', 'N/A')[:50]}...")
+            
+            async with ClientSession() as session:
+                if PREFER_LOCAL:
+                    # Try local first
+                    logger.info("Attempting local vLLM...")
+                    result, error = await call_local_vllm(session, payload)
+                    
+                    if result:
+                        logger.info("✅ Response from local vLLM")
+                        result["provider"] = "local_vllm"
+                        return web.json_response(result)
+                    
+                    logger.warning(f"Local vLLM failed: {error}, trying HuggingFace Cloud...")
+                    result, error = await call_huggingface_api(session, payload)
+                    
+                    if result:
+                        logger.info("✅ Response from HuggingFace Cloud")
+                        return web.json_response(result)
+                    
+                    logger.error(f"Both backends failed. HF error: {error}")
+                    return web.json_response(
+                        {"error": f"All backends failed. Last error: {error}"},
+                        status=503
+                    )
+                else:
+                    # Cloud-first mode
+                    logger.info("Attempting HuggingFace Cloud (cloud-first mode)...")
+                    result, error = await call_huggingface_api(session, payload)
+                    
+                    if result:
+                        logger.info("✅ Response from HuggingFace Cloud")
+                        return web.json_response(result)
+                    
+                    logger.warning(f"HuggingFace Cloud failed: {error}, trying local vLLM...")
+                    result, error = await call_local_vllm(session, payload)
+                    
+                    if result:
+                        logger.info("✅ Response from local vLLM")
+                        result["provider"] = "local_vllm"
+                        return web.json_response(result)
+                    
+                    logger.error(f"Both backends failed. Local error: {error}")
+                    return web.json_response(
+                        {"error": f"All backends failed. Last error: {error}"},
+                        status=503
+                    )
+        
+        except Exception as e:
+            logger.exception("Unexpected error in chat_completions")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def models(request):
+        """List available models"""
+        return web.json_response({
+            "object": "list",
+            "data": [{
+                "id": "meta-llama/Meta-Llama-3-8B-Instruct",
+                "object": "model",
+                "created": 1677610602,
+                "owned_by": "meta-llama",
+                "providers": ["local_vllm", "huggingface_cloud"]
+            }]
+        })
+
+    def main():
+        app = web.Application()
+        app.router.add_get("/health", health_check)
+        app.router.add_get("/v1/models", models)
+        app.router.add_post("/v1/chat/completions", chat_completions)
+        
+        port = int(os.getenv("PORT", "8080"))
+        logger.info(f"🚀 Starting hybrid proxy on port {port}")
+        logger.info(f"   Local vLLM: {LOCAL_VLLM_URL}")
+        logger.info(f"   HF API: {HF_API_URL}")
+        logger.info(f"   Strategy: {'Local-first' if PREFER_LOCAL else 'Cloud-first'}")
+        
+        web.run_app(app, host="0.0.0.0", port=port)
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hybrid-inference-proxy
+  namespace: llama3-multi-adapter
+  labels:
+    app: hybrid-proxy
+spec:
+  replicas: 2  # Multiple replicas for HA
+  selector:
+    matchLabels:
+      app: hybrid-proxy
+  template:
+    metadata:
+      labels:
+        app: hybrid-proxy
+    spec:
+      containers:
+      - name: proxy
+        image: python:3.11-slim
+        command:
+        - python3
+        - /app/proxy.py
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-tokens
+              key: HF_TOKEN_READ
+        - name: LOCAL_VLLM_URL
+          value: "http://llama3-vllm:8000"
+        - name: HF_API_URL
+          value: "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
+        - name: PREFER_LOCAL
+          value: "true"  # Try local first, fallback to cloud
+        - name: LOCAL_TIMEOUT
+          value: "30"
+        - name: HF_TIMEOUT
+          value: "60"
+        - name: PORT
+          value: "8080"
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: proxy-code
+          mountPath: /app
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      initContainers:
+      - name: install-deps
+        image: python:3.11-slim
+        command:
+        - sh
+        - -c
+        - pip install aiohttp
+        volumeMounts:
+        - name: pip-cache
+          mountPath: /root/.cache/pip
+      volumes:
+      - name: proxy-code
+        configMap:
+          name: hybrid-proxy-config
+          defaultMode: 0755
+      - name: pip-cache
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hybrid-inference-proxy
+  namespace: llama3-multi-adapter
+  labels:
+    app: hybrid-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app: hybrid-proxy
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hybrid-inference-proxy
+  namespace: llama3-multi-adapter
+  annotations:
+    cert-manager.io/cluster-issuer: "selfsigned-cluster-issuer"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - ai.local
+    - llama3.local
+    secretName: hybrid-proxy-tls
+  rules:
+  - host: ai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: hybrid-inference-proxy
+            port:
+              number: 8080
+  - host: llama3.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: hybrid-inference-proxy
+            port:
+              number: 8080
